@@ -138,9 +138,22 @@ chown "$SYSTEM_USER":"$SYSTEM_USER" "${SSH_DIR}/known_hosts"
 
 echo
 echo "----- ADD THIS SSH KEY TO GITHUB → REPO → DEPLOY KEYS -----"
-cat "${KEY_PATH}.pub" || true
+
+if [[ -f "${KEY_PATH}.pub" ]]; then
+    cat "${KEY_PATH}.pub"
+else
+    # try to detect existing .pub key instead of failing
+    EXISTING_PUB=$(find "$SSH_DIR" -maxdepth 1 -type f -name "*.pub" | head -n 1 || true)
+    if [[ -n "$EXISTING_PUB" ]]; then
+        cat "$EXISTING_PUB"
+    else
+        echo "(no public key found – you must manually copy key to ~/.ssh)"
+    fi
+fi
+
 echo "------------------------------------------------------------"
 echo
+
 
 
 ###############################################################################
@@ -250,8 +263,9 @@ set -euo pipefail
 
 SYSTEM_USER="$SYSTEM_USER"
 ROOT="$ROOT"
-BARE="$BARE_REPO"
+BARE="${BARE_REPO}"
 WORK="$WORK_REPO"
+export SYSTEM_USER ROOT BARE WORK
 
 echo "Checking if bare repo has data..."
 

@@ -34,6 +34,13 @@ set -euo pipefail
 #
 # Run installer:
 # ./andgo.sh
+#
+# Once you have run the script for the first time...
+# you will need to then add your newly generated ssh key to your repo...
+# if you do not have a repo, then it's likely you have no need or use for this script at all...
+# if you are a team member, you will likely have someone else assisting you with this process
+# who will be able to help you with the rest of this installation process.
+#
 # --------------------------------------------------------------------
 #
 # REQUIREMENTS:

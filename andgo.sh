@@ -22,6 +22,20 @@ set -euo pipefail
 #       * Uses rsync with a strict exclusion list
 #       * Log rotation (keeps last 25 logs)
 #
+#
+# --------------------------------------------------------------------
+# FOR DOWNLOAD AND INSTALL
+# --------------------------------------------------------------------
+# Download installer into current directory:
+# curl -L "https://raw.githubusercontent.com/DeGrinch/allwaysup_install/main/andgo.sh" -o andgo.sh
+#
+# Make executable:
+# chmod +x andgo.sh
+#
+# Run installer:
+# ./andgo.sh
+# --------------------------------------------------------------------
+#
 # REQUIREMENTS:
 #   - Must be run as root
 ###############################################################################

@@ -3,6 +3,7 @@ set -euo pipefail
 
 ###############################################################################
 # CONTEXT HEADER: ALLWAYSUP INSTALLER + GIT SYNC INITIALIZATION (FINAL)
+# filename: andgo.sh
 #
 # PURPOSE:
 #   - Create system user: allwaysup
@@ -22,7 +23,6 @@ set -euo pipefail
 #       * Uses rsync with a strict exclusion list
 #       * Log rotation (keeps last 25 logs)
 #
-#
 # --------------------------------------------------------------------
 # FOR DOWNLOAD AND INSTALL
 # --------------------------------------------------------------------
@@ -34,14 +34,6 @@ set -euo pipefail
 #
 # Run installer:
 # ./andgo.sh
-#
-# Once you have run the script for the first time...
-# you will need to then add your newly generated ssh key to your repo...
-# if you do not have a repo, then it's likely you have no need or use for this script at all...
-# if you are a team member, you will likely have someone else assisting you with this process
-# who will be able to help you with the rest of this installation process.
-#
-# --------------------------------------------------------------------
 #
 # REQUIREMENTS:
 #   - Must be run as root
@@ -57,13 +49,21 @@ SYNC_BIN="${ROOT}/services/backup/allwaysup_local_sync.sh"
 
 log(){ printf '%s %s\n' "$(date --iso-8601=seconds)" "$*"; }
 
+# 1. Require root
 [[ "$(id -u)" -eq 0 ]] || { echo "must run as root"; exit 1; }
 
+# 2. Ensure system user exists
 id "$SYSTEM_USER" >/dev/null 2>&1 || useradd --system --create-home --shell /bin/bash "$SYSTEM_USER"
 
-mkdir -p "${ROOT}/install" "${ROOT}/wifi_tools" "${ROOT}/services/backup"
+# 3. Ensure directory structure exists
+mkdir -p "${ROOT}/install"
+mkdir -p "${ROOT}/wifi_tools"
+mkdir -p "${ROOT}/services/backup"
+mkdir -p "${ROOT}/gitrepo"
+
 chown -R "$SYSTEM_USER":"$SYSTEM_USER" "$ROOT"
 
+# 4. Prompt user for repo URL
 read -rp "Repo URL (default ${DEFAULT_REPO}): " REPO_URL
 REPO_URL="${REPO_URL:-$DEFAULT_REPO}"
 
@@ -72,39 +72,68 @@ UUID="$(uuidgen)"
 KEY_NAME="ed25519_allwaysup_${REPO_OWNER}_${UUID}"
 KEY_PATH="${SSH_DIR}/${KEY_NAME}"
 
+# 5. Ensure .ssh exists
 mkdir -p "$SSH_DIR"
 chmod 700 "$SSH_DIR"
 chown "$SYSTEM_USER":"$SYSTEM_USER" "$SSH_DIR"
 
-echo
-echo "Optional: provide path to existing SSH private key (ENTER to auto-generate):"
-read -rp "> " KEY_SRC
+# 6. Key existence check / reuse / delete logic
+EXISTING_KEYS=$(find "$SSH_DIR" -maxdepth 1 -type f \( -name "*.pem" -o -name "id_*" -o -name "ed25519*" \) 2>/dev/null || true)
 
-if [[ -n "$KEY_SRC" && -f "$KEY_SRC" ]]; then
-    cp "$KEY_SRC" "$KEY_PATH"
-    chmod 600 "$KEY_PATH"
-    chown "$SYSTEM_USER":"$SYSTEM_USER" "$KEY_PATH"
+if [[ -n "$EXISTING_KEYS" ]]; then
+    echo
+    echo "The ssh directory already has a ssh key!! - Do we generate a new key?"
+    echo "!! YES will delete the previous key - revoking access to the remote repo !!"
+    echo "1. No  (keep current key and proceed with installation)"
+    echo "2. Yes (delete all keys in /home/allwaysup/.ssh and generate a new key)"
+    read -rp "Choose [1 or 2]: " ANSWER
+
+    if [[ "$ANSWER" == "2" ]]; then
+        echo "Deleting existing SSH keys..."
+        find "$SSH_DIR" -maxdepth 1 -type f \( -name "*.pem" -o -name "id_*" -o -name "ed25519*" \) -exec rm -f {} +
+        USE_EXISTING_KEY=false
+    else
+        echo "Keeping existing key(s)."
+        USE_EXISTING_KEY=true
+    fi
 else
-    sudo -u "$SYSTEM_USER" ssh-keygen -t ed25519 -C "$KEY_NAME" -f "$KEY_PATH" -N "" >/dev/null
+    USE_EXISTING_KEY=false
 fi
 
+# 7. Key copy or generate
+if [[ "$USE_EXISTING_KEY" == true ]]; then
+    echo "Using existing SSH key(s)."
+else
+    echo
+    echo "Optional: provide path to existing SSH private key (ENTER to auto-generate):"
+    read -rp "> " KEY_SRC
+
+    if [[ -n "$KEY_SRC" && -f "$KEY_SRC" ]]; then
+        cp "$KEY_SRC" "$KEY_PATH"
+        chmod 600 "$KEY_PATH"
+        chown "$SYSTEM_USER":"$SYSTEM_USER" "$KEY_PATH"
+    else
+        sudo -u "$SYSTEM_USER" ssh-keygen -t ed25519 -C "$KEY_NAME" -f "$KEY_PATH" -N "" >/dev/null
+    fi
+fi
+
+# 8. GitHub known_hosts trust
 ssh-keyscan -t rsa github.com >> "${SSH_DIR}/known_hosts" 2>/dev/null
 chmod 644 "${SSH_DIR}/known_hosts"
 chown "$SYSTEM_USER":"$SYSTEM_USER" "${SSH_DIR}/known_hosts"
 
 echo
 echo "----- PUBLIC KEY (ADD TO GITHUB) -----"
-cat "${KEY_PATH}.pub"
+cat "${KEY_PATH}.pub" 2>/dev/null || true
 echo "--------------------------------------"
 echo
 
-mkdir -p "$(dirname "$BARE_REPO")"
-chown "$SYSTEM_USER":"$SYSTEM_USER" "$(dirname "$BARE_REPO")"
-
+# 9. Init bare repo if missing
 if [[ ! -d "$BARE_REPO" ]]; then
     sudo -u "$SYSTEM_USER" git init --bare "$BARE_REPO"
 fi
 
+# 10. Init working repo if missing
 if [[ ! -d "${WORK_REPO}/.git" ]]; then
     sudo -u "$SYSTEM_USER" git -C "$WORK_REPO" init
     sudo -u "$SYSTEM_USER" bash -c "cd '$WORK_REPO'; echo '# allwaysup repo' > README.md"
@@ -112,10 +141,12 @@ if [[ ! -d "${WORK_REPO}/.git" ]]; then
     sudo -u "$SYSTEM_USER" git -C "$WORK_REPO" commit -m 'initial commit'
 fi
 
+# 11. Convert HTTPS → SSH form if needed
 if [[ "$REPO_URL" =~ ^https://github.com/(.+)/(.+)$ ]]; then
     REPO_URL="git@github.com:${BASH_REMATCH[1]}/${BASH_REMATCH[2]}.git"
 fi
 
+# 12. Configure remotes
 sudo -u "$SYSTEM_USER" git -C "$WORK_REPO" remote remove origin 2>/dev/null || true
 sudo -u "$SYSTEM_USER" git -C "$WORK_REPO" remote remove localpush 2>/dev/null || true
 

@@ -14,7 +14,7 @@ set -euo pipefail
 #        /home/allwaysup/gitrepo
 #   3) Init git:
 #        Working repo: /home/allwaysup/
-#        Bare repo:    /home/allwaysup/gitrepo/allwaysup.git
+#        Bare repo:    /home/allwaysup/gitrepo
 #   4) Manage SSH key: ed25519_allwaysup_<owner>_<uuid>
 #   5) Write helper scripts:
 #        services/backup/allwaysup_local_sync.sh
@@ -38,7 +38,7 @@ ROOT="/home/${SYSTEM_USER}"
 SSH_DIR="${ROOT}/.ssh"
 WORK_REPO="${ROOT}"
 BARE_REPO_DIR="${ROOT}/gitrepo"
-BARE_REPO="${ROOT}/gitrepo/allwaysup.git"
+BARE_REPO="${ROOT}/gitrepo"
 
 # Script output locations
 SYNC_BIN="${ROOT}/services/backup/allwaysup_local_sync.sh"
@@ -223,7 +223,7 @@ set -euo pipefail
 
 SYSTEM_USER="allwaysup"
 ROOT="/home/allwaysup"
-BARE="/home/allwaysup/gitrepo/allwaysup.git"
+BARE="/home/allwaysup/gitrepo"
 WORK="/home/allwaysup"
 
 echo "Checking if bare repo has data..."
